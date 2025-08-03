@@ -110,10 +110,6 @@ uint32_t gen_alu_control(idex_reg_t idex_reg)
       alu_control = 0x1; // Subtraction  (Branch uses subtraction to determine if condition is true (comparisons))
       break;
 
-    case 0x6F:  // JAL
-      alu_control = 0x0; // Addition  (To add 4 to PC for return address)
-      break;
-
     default:
       alu_control = 0x111; // Invalid instruction
     }
