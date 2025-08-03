@@ -70,16 +70,22 @@ ifid_reg_t stage_fetch(pipeline_wires_t* pwires_p, regfile_t* regfile_p, Byte* m
 //Then it writes to idex_reg rs1, rs2, sign extended imm, PC, and generates all the signals?
 idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile_t* regfile_p)
 {
-  idex_reg_t idex_reg = {0};
-
+  //Read the PC and the instruction from ifid_reg
   uint32_t PC = ifid_reg.instr_addr;
   Instruction instruction = ifid_reg.instr;
+
+  //Generate all the control signals
+  idex_reg_t idex_reg = gen_control(instruction);
+
+  //Generate the immediate and initialize the registers
   uint32_t imm = gen_imm(instruction);
-  Register rs1;
-  Register rs2;
+  Register rs1 = 0;
+  Register rs2 = 0;
+  uint32_t ALU_control = 0;
 
   //I based these commands off our stuff from lab 2 and 3, which for some reason has different commands
   //From the green card he gave, idk if this is done right
+  //Extract the rs1 and rs2 addresses based on the instruction type
   switch(instruction.opcode){
     //R-type
     case 0x33:
@@ -122,15 +128,17 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
       break;
   }
 
+  //Read the values of rs1 and rs2
   int rs1_val = regfile_p->R[rs1];
   int rs2_val = regfile_p->R[rs2];
 
+  //Put the instruction, PC, generated immediate, rs1 and rs2 values, and the ALU control command into the idex register
   idex_reg.instr = instruction;
   idex_reg.instr_addr = PC;
   idex_reg.imm = imm;
   idex_reg.rs1_val = rs1_val;
   idex_reg.rs2_val = rs2_val;
-  idex_reg.ALU_control = gen_alu_control(idex_reg);
+  idex_reg.ALUcontrol = gen_alu_control(idex_reg);
   return idex_reg;
 }
 
@@ -156,10 +164,68 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* memory_p, Cache* cache_p)
 {
   memwb_reg_t memwb_reg = {0};
+
+  Instruction instruction = exmem_reg.instr;
+  uint32_t PC = exmem_reg.instr_addr;
+  uint32_t rs1_val = exmem_reg.rs1_val;
+  uint32_t rs2_val = exmem_reg.rs2_val;
+  //uint32_t ALU result goes here, im assuming that it adds imm and rs1 when needed
   
-  /**
-   * YOUR CODE HERE
-   */
+  uint32_t load_val = 0;
+
+  //For loading a value from memory
+  if(exmem_reg.MemRead == 1){
+    //No need to exclude non-load I-type instructions here, as they would not have memread = 1
+    switch(instruction.itype.funct3){
+      case 0x0: //Load byte
+        //memory_p[ALU result] 
+        load_val = sign_extend_number(, 8);
+        break;
+      case 0x1: //Load half word
+        //memory_p[ALU result] | (memory_p[ALU result + 1] << 8) 
+        load_val = sign_extend_number(, 16);
+        break;
+      case 0x2: //Load word
+      //memory_p[ALU result] | (memory_p[ALU result + 1] << 8) | (memory_p[ALU result + 2] << 16) | (memory_[ALU result + 3] << 24)
+        load_val = ;
+        break;
+      default:
+        break;
+     }
+   }
+
+    //For storing a value into memory
+  if(exmem_reg.MemWrite == 1){
+     switch(instruction.stype.funct3){
+       case 0x0: //Store byte
+         //memory_p[ALU_result] = rs2_val & 0xFF;
+         break;
+       case 0x1: //Store half word
+         //memory_p[ALU_result] = rs2_val & 0xFF;
+         //memory_p[ALU_result + 1] = (rs2_val >> 8) & 0xFF;
+         break;
+       case 0x2: //Store word
+         //memory_p[ALU_result] = rs2_val & 0xFF;
+         //memory_p[ALU_result + 1] = (rs2_val >> 8) & 0xFF;
+         //memory_p[ALU_result + 2] = (rs2_val >> 16) & 0xFF;
+         //memory_p[ALU_result + 3] = (rs2_val >> 24) & 0xFF;
+         break;
+       default:
+         break;
+     }
+   }
+
+  memwb_reg.instr = instruction;
+  memwb_reg.instr_addr = PC;
+  
+  if(exmem_reg.MemtoReg == 1){
+    memwb_reg.wb_v = load_val;
+  }
+  else{
+    //memwb_reg.wb_v = ALU result
+  }
+
+  //Need to add a bunch of other fields in the memwb_reg
   return memwb_reg;
 }
 
@@ -169,9 +235,9 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
  **/ 
 void stage_writeback(memwb_reg_t memwb_reg, pipeline_wires_t* pwires_p, regfile_t* regfile_p)
 {
-  /**
-   * YOUR CODE HERE
-   */
+  if(memwb_reg.RegWrite == 1){
+    regfile_p[memwb_reg.rd] = memwb_reg.wb_v;
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

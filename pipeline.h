@@ -62,9 +62,9 @@ typedef struct
 {
   Instruction instr;
   uint32_t    instr_addr;
-  /**
-   * Add other fields here
-   */
+  
+  //Fields I added
+  uint32_t wb_v;
 }memwb_reg_t;
 
 
