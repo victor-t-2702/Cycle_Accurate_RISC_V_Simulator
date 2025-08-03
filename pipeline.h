@@ -27,18 +27,19 @@ typedef struct
 {
   Instruction instr;
   uint32_t    instr_addr;
-  /**
-   * Add other fields here
-   */
+
 }ifid_reg_t;
 
 typedef struct
 {
   Instruction instr;
   uint32_t    instr_addr;
-  /**
-   * Add other fields here
-   */
+  
+  //Fields I added
+  Register rs1_val;
+  Register rs2_val;
+  uint32_t imm;
+
 }idex_reg_t;
 
 typedef struct
@@ -144,4 +145,4 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
 
 void bootstrap(pipeline_wires_t* pwires_p, pipeline_regs_t* pregs_p, regfile_t* regfile_p);
 
-#endif  // __PIPELINE_H__
+#endif  // __PIPELINE_H__;
