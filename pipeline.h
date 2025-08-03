@@ -39,7 +39,7 @@ typedef struct
   Register rs1_val;
   Register rs2_val;
   uint32_t imm;
-  Register rd;
+  Register rd_address;
   
   bool ALUSrc;
   uint32_t ALUcontrol;
@@ -57,6 +57,7 @@ typedef struct
   
   Register rs1_val;
   Register rs2_val;
+  Register rd_address;
   uint32_t imm;
 
   bool MemWrite;
@@ -78,6 +79,7 @@ typedef struct
   uint32_t wb_v;
   Register rs1_val;
   Register rs2_val;
+  Register rd_address;
   uint32_t imm;
 
   bool MemWrite;

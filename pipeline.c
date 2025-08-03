@@ -144,7 +144,7 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
   idex_reg.imm = imm;
   idex_reg.rs1_val = rs1_val;
   idex_reg.rs2_val = rs2_val;
-  idex_reg.rd = rd;
+  idex_reg.rd_address = rd;
   idex_reg.ALUcontrol = gen_alu_control(idex_reg);
   return idex_reg;
 }
@@ -160,6 +160,7 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
   uint32_t PC = idex_reg.instr_addr;
   uint32_t rs1_val = idex_reg.rs1_val;
   uint32_t rs2_val = idex_reg.rs2_val;
+  Register rd_address = idex_reg.rd_address;
   bool ALUSrc = idex_reg.ALUSrc;
   uint32_t ALUcontrol = idex_reg.ALUcontrol;
   uint32_t imm = idex_reg.imm;
@@ -185,6 +186,13 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
   exmem_reg.MemRead = idex_reg.MemRead;
   exmem_reg.MemWrite = idex_reg.MemWrite;  // Move signals along from ID/EX register
 
+  exmem_reg.rs1_val = rs1_val;
+  exmem_reg.rs2_val = rs2_val;
+  exmem_reg.instr = instruction;
+  exmem_reg.instr_addr = PC;
+  exmem_reg.imm = imm;
+  exmem_reg.rd_address = rd_address;
+
   return exmem_reg;
 }
 
@@ -203,7 +211,10 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
   uint32_t rs1_val = exmem_reg.rs1_val;
   uint32_t rs2_val = exmem_reg.rs2_val;
   uint32_t ALU_Result = exmem_reg.ALU_Result;  
+  Register rd_address = exmem_reg.rd_address;
+  uint32_t imm = exmem_reg.imm;
 
+  bool RegWrite = exmem_reg.RegWrite;
 
   uint32_t load_val = 0;
 
@@ -248,6 +259,9 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
 
   memwb_reg.instr = instruction;
   memwb_reg.instr_addr = PC;
+  memwb_reg.imm = imm;
+  memwb_reg.rd_address = rd_address;
+  memwb_reg.RegWrite = RegWrite;
   
   if(exmem_reg.MemtoReg == 1){
     memwb_reg.wb_v = load_val;
