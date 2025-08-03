@@ -74,7 +74,7 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
 
   uint32_t PC = ifid_reg.instr_addr;
   Instruction instruction = ifid_reg.instr;
-  uint32_t imm;
+  uint32_t imm = gen_imm(instruction);
   Register rs1;
   Register rs2;
 
@@ -83,94 +83,55 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
   switch(instruction.opcode){
     //R-type
     case 0x33:
-      imm = 0;
       rs1 = instruction.rtype.rs1;
       rs2 = instruction.rtype.rs2;
+      break;
     //Non-load I-type
     case 0x13:
-      imm = sign_extend_number(instruction.itype.imm, 12);
       rs1 = instruction.itype.rs1;
       rs2 = 0;
+      break;
     //Load I-type
     case 0x03:
-      imm = sign_extend_number(instruction.itype.imm, 12);
       rs1 = instruction.itype.rs1;
       rs2 = 0;
+      break;
     //S-type
     case 0x23:
-      imm = get_store_offset(instruction);
       rs1 = instruction.stype.rs1;
       rs2 = instruction.stype.rs2;
+      break;
     //B-type
     case 0x63:
-      imm = get_branch_offset(instruction);
       rs1 = instruction.sbtype.rs1;
       rs2 = instruction.sbtype.rs2;
+      break;
     //lui 
     case 0x37:
-      //I dunnoe if i sign extend or nah
-      imm = instruction.utype.imm;
       rs1 = 0;
       rs2 = 0;
+      break;
     //jal
     case 0x6f:
-      imm = get_jump_offset(instruction);
       rs1 = 0;
       rs2 = 0;
+      break;
     default:
-      imm = 0;
       rs1 = 0;
       rs2 = 0;
+      break;
   }
 
   int rs1_val = regfile_p->R[rs1];
   int rs2_val = regfile_p->R[rs2];
+
   idex_reg.instr = instruction;
   idex_reg.instr_addr = PC;
   idex_reg.imm = imm;
   idex_reg.rs1_val = rs1_val;
   idex_reg.rs2_val = rs2_val;
+  idex_reg.ALU_control = gen_alu_control(idex_reg);
   return idex_reg;
-}
-
-//I think this entire function is actually meant to go in stage_helpers, and repalce part of the stage_decode function above
-//Ill fix this later
-uint32_t get_imm(Instruction instruction){
-  //Calculate offset depending on instruction type
-  switch(instruction.opcode){
-    //R-type
-    case 0x33:
-      return 0;
-    
-    //Non-load I-type
-    case 0x13:
-      return sign_extend_number(instruction.itype.imm, 12);
-
-    //Load I-type
-    case 0x03:
-      return sign_extend_number(instruction.itype.imm, 12);
-
-    //S-type
-    case 0x23:
-      return get_store_offset(instruction);
-    
-    //B-type
-    case 0x63:
-      return get_branch_offset(instruction);
-
-    //lui 
-    case 0x37:
-      //I dunnoe if i sign extend or nah
-      return instruction.utype.imm;
-
-    //jal
-    case 0x6f:
-      return get_jump_offset(instruction);
-
-    default:
-      return 0;
-  }
-    
 }
 
 /**
@@ -190,9 +151,12 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
  * STAGE  : stage_mem
  * output : memwb_reg_t
  **/ 
+//For load read the exmem register rs1 + imm, write memwb rs1 + imm
+//For store read the exmem register rs1 + imm and rs2, no need to write anything
 memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* memory_p, Cache* cache_p)
 {
   memwb_reg_t memwb_reg = {0};
+  
   /**
    * YOUR CODE HERE
    */

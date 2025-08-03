@@ -50,20 +50,35 @@ uint32_t execute_alu(uint32_t alu_inp1, uint32_t alu_inp2, uint32_t alu_control)
 uint32_t gen_imm(Instruction instruction)
 {
   int imm_val = 0;
-  /**
-   * YOUR CODE HERE
-   */
   switch(instruction.opcode) {
-        case 0x63: //B-type
-            imm_val = get_branch_offset(instruction);
-            break;
-        /**
-         * YOUR CODE HERE
-         */
-        default: // R and undefined opcode
-            break;
-    };
-    return imm_val;
+    case 0x63: //B-type
+      imm_val = get_branch_offset(instruction);
+      break;
+    //Non-load I-type
+    case 0x13:
+      imm_val = sign_extend_number(instruction.itype.imm, 12);
+      break;
+    //Load I-type
+    case 0x03:
+      imm_val = sign_extend_number(instruction.itype.imm, 12);
+      break;
+    //S-type
+    case 0x23:
+      imm_val = get_store_offset(instruction);
+      break;
+    //lui 
+    case 0x37:
+      //I dunnoe if i sign extend or nah, i mightve done this one wrong
+      imm_val = instruction.utype.imm;
+      break;
+    //jal
+    case 0x6f:
+      imm_val = get_jump_offset(instruction);
+      break;
+    default: // R and undefined opcode
+      break;
+  };
+  return imm_val;
 }
 
 /**
@@ -75,13 +90,72 @@ idex_reg_t gen_control(Instruction instruction)
 {
   idex_reg_t idex_reg = {0};
   switch(instruction.opcode) {
-      case 0x33:  //R-type
-        /**
-         * YOUR CODE HERE
-         */
-          break;
-      default:  // Remaining opcodes
-          break;
+    case 0x33:  //R-type
+      idex_reg.ALUSrc = 0;
+      idex_reg.MemWrite = 0;
+      idex_reg.MemRead = 0;
+      idex_reg.MemtoReg = 0;
+      idex_reg.RegWrite = 1;
+      idex_reg.Branch = 0;
+      break;
+    //Non-load I-type
+    case 0x13:
+      idex_reg.ALUSrc = 1;
+      idex_reg.MemWrite = 0;
+      idex_reg.MemRead = 0;
+      idex_reg.MemtoReg = 0;
+      idex_reg.RegWrite = 1;
+      idex_reg.Branch = 0;
+      break;
+    //Load I-type
+    case 0x03:
+      idex_reg.ALUSrc = 1;
+      idex_reg.MemWrite = 0;
+      idex_reg.MemRead = 1;
+      idex_reg.MemtoReg = 1;
+      idex_reg.RegWrite = 1;
+      idex_reg.Branch = 0;
+      break;
+    //S-type
+    case 0x23:
+      idex_reg.ALUSrc = 1;
+      idex_reg.MemWrite = 1;
+      idex_reg.MemRead = 0;
+      idex_reg.MemtoReg = 0;
+      idex_reg.RegWrite = 0;
+      idex_reg.Branch = 0;
+      break;
+    //B-type
+    case 0x63:
+      idex_reg.ALUSrc = 0;
+      idex_reg.MemWrite = 0;
+      idex_reg.MemRead = 0;
+      idex_reg.MemtoReg = 0;
+      idex_reg.RegWrite = 0;
+      idex_reg.Branch = 1;
+      break;
+    //lui 
+    case 0x37:
+      idex_reg.ALUSrc = 1;
+      idex_reg.MemWrite = 0;
+      //I think it directly loads the immediate into the rd, so no mem read/write, and 0 for mem to reg
+      idex_reg.MemRead = 0;
+      idex_reg.MemtoReg = 0;
+      idex_reg.RegWrite = 1;
+      idex_reg.Branch = 0;
+      break;
+    //jal
+    case 0x6f:
+      idex_reg.ALUSrc = 1;
+      idex_reg.MemWrite = 0;
+      idex_reg.MemRead = 0;
+      idex_reg.MemtoReg = 0;
+      idex_reg.RegWrite = 1;
+      //I think this is right
+      idex_reg.Branch = 1;
+      break;
+    default:  // Remaining opcodes
+      break;
   }
   return idex_reg;
 }

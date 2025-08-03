@@ -39,7 +39,14 @@ typedef struct
   Register rs1_val;
   Register rs2_val;
   uint32_t imm;
-
+  
+  bool ALUSrc;
+  uint32_t ALUcontrol;
+  bool MemWrite;
+  bool MemRead;
+  bool MemtoReg;
+  bool RegWrite;
+  bool Branch;
 }idex_reg_t;
 
 typedef struct
