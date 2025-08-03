@@ -39,6 +39,7 @@ typedef struct
   Register rs1_val;
   Register rs2_val;
   uint32_t imm;
+  Register rd;
   
   bool ALUSrc;
   uint32_t ALUcontrol;
@@ -75,6 +76,18 @@ typedef struct
   
   //Fields I added
   uint32_t wb_v;
+  Register rs1_val;
+  Register rs2_val;
+  uint32_t imm;
+
+  bool MemWrite;
+  bool MemRead;
+  bool MemtoReg;
+  bool RegWrite;
+  bool Branch;
+  bool isZero; // Zero checking for BRANCH
+  uint32_t PC_Offset;
+  uint32_t ALU_Result;
 }memwb_reg_t;
 
 

@@ -81,6 +81,7 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
   uint32_t imm = gen_imm(instruction);
   Register rs1 = 0;
   Register rs2 = 0;
+  Register rd = 0;
   uint32_t ALU_control = 0;
 
   //I based these commands off our stuff from lab 2 and 3, which for some reason has different commands
@@ -91,16 +92,19 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
     case 0x33:
       rs1 = instruction.rtype.rs1;
       rs2 = instruction.rtype.rs2;
+      rd = instruction.rtype.rd;
       break;
     //Non-load I-type
     case 0x13:
       rs1 = instruction.itype.rs1;
       rs2 = 0;
+      rd = instruction.itype.rd;
       break;
     //Load I-type
     case 0x03:
       rs1 = instruction.itype.rs1;
       rs2 = 0;
+      rd = instruction.itype.rd;
       break;
     //S-type
     case 0x23:
@@ -116,11 +120,13 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
     case 0x37:
       rs1 = 0;
       rs2 = 0;
+      rd = instruction.utype.rd;
       break;
     //jal
     case 0x6f:
       rs1 = 0;
       rs2 = 0;
+      rd = instruction.ujtype.rd;
       break;
     default:
       rs1 = 0;
@@ -132,12 +138,13 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
   int rs1_val = regfile_p->R[rs1];
   int rs2_val = regfile_p->R[rs2];
 
-  //Put the instruction, PC, generated immediate, rs1 and rs2 values, and the ALU control command into the idex register
+  //Put the instruction, PC, generated immediate, rs1 and rs2 values, rd address, and the ALU control command into the idex register
   idex_reg.instr = instruction;
   idex_reg.instr_addr = PC;
   idex_reg.imm = imm;
   idex_reg.rs1_val = rs1_val;
   idex_reg.rs2_val = rs2_val;
+  idex_reg.rd = rd;
   idex_reg.ALUcontrol = gen_alu_control(idex_reg);
   return idex_reg;
 }
@@ -195,8 +202,9 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
   uint32_t PC = exmem_reg.instr_addr;
   uint32_t rs1_val = exmem_reg.rs1_val;
   uint32_t rs2_val = exmem_reg.rs2_val;
-  //uint32_t ALU result goes here, im assuming that it adds imm and rs1 when needed
-  
+  uint32_t ALU_Result = exmem_reg.ALU_Result;  
+
+
   uint32_t load_val = 0;
 
   //For loading a value from memory
@@ -204,16 +212,13 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
     //No need to exclude non-load I-type instructions here, as they would not have memread = 1
     switch(instruction.itype.funct3){
       case 0x0: //Load byte
-        //memory_p[ALU result] 
-        load_val = sign_extend_number(, 8);
+        load_val = sign_extend_number(memory_p[ALU_Result], 8);
         break;
       case 0x1: //Load half word
-        //memory_p[ALU result] | (memory_p[ALU result + 1] << 8) 
-        load_val = sign_extend_number(, 16);
+        load_val = sign_extend_number((memory_p[ALU_Result] | (memory_p[ALU_Result + 1] << 8)), 16);
         break;
       case 0x2: //Load word
-      //memory_p[ALU result] | (memory_p[ALU result + 1] << 8) | (memory_p[ALU result + 2] << 16) | (memory_[ALU result + 3] << 24)
-        load_val = ;
+        load_val = memory_p[ALU_Result] | (memory_p[ALU_Result + 1] << 8) | (memory_p[ALU_Result + 2] << 16) | (memory_p[ALU_Result + 3] << 24);
         break;
       default:
         break;
@@ -224,17 +229,17 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
   if(exmem_reg.MemWrite == 1){
      switch(instruction.stype.funct3){
        case 0x0: //Store byte
-         //memory_p[ALU_result] = rs2_val & 0xFF;
+         memory_p[ALU_Result] = rs2_val & 0xFF;
          break;
        case 0x1: //Store half word
-         //memory_p[ALU_result] = rs2_val & 0xFF;
-         //memory_p[ALU_result + 1] = (rs2_val >> 8) & 0xFF;
+         memory_p[ALU_Result] = rs2_val & 0xFF;
+         memory_p[ALU_Result + 1] = (rs2_val >> 8) & 0xFF;
          break;
        case 0x2: //Store word
-         //memory_p[ALU_result] = rs2_val & 0xFF;
-         //memory_p[ALU_result + 1] = (rs2_val >> 8) & 0xFF;
-         //memory_p[ALU_result + 2] = (rs2_val >> 16) & 0xFF;
-         //memory_p[ALU_result + 3] = (rs2_val >> 24) & 0xFF;
+         memory_p[ALU_Result] = rs2_val & 0xFF;
+         memory_p[ALU_Result + 1] = (rs2_val >> 8) & 0xFF;
+         memory_p[ALU_Result + 2] = (rs2_val >> 16) & 0xFF;
+         memory_p[ALU_Result + 3] = (rs2_val >> 24) & 0xFF;
          break;
        default:
          break;
@@ -248,7 +253,7 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
     memwb_reg.wb_v = load_val;
   }
   else{
-    //memwb_reg.wb_v = ALU result
+    memwb_reg.wb_v = ALU_Result;
   }
 
   //Need to add a bunch of other fields in the memwb_reg
