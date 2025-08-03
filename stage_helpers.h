@@ -14,9 +14,106 @@
 uint32_t gen_alu_control(idex_reg_t idex_reg)
 {
   uint32_t alu_control = 0;
-  /**
-   * YOUR CODE HERE
-   */
+  Instruction instr = idex_reg.instr;
+  switch(idex_reg.instr.opcode) {
+    // R-Type
+    case 0x33:
+      switch(idex_reg.instr.rtype.funct3) {
+        case 0x0:
+          if(idex_reg.instr.rtype.funct7 == 0x00) {
+            alu_control = 0x0; // Addition
+          }
+          else {
+            alu_control = 0x1; // Subtraction
+          }
+          break;
+        case 0x4:
+          alu_control = 0x3; // XOR
+          break;
+        case 0x6:
+          alu_control = 0x4; // OR
+          break;
+        case 0x7:
+          alu_control = 0x5; // AND
+          break;
+        case 0x1:
+          alu_control = 0x6; // SLL (Shift Left Logical)
+          break;
+        case 0x5:
+          if(idex_reg.instr.rtype.funct7 == 0x00) {
+            alu_control = 0x7; // SRL (Shift Right Logical)
+          }
+          else {
+            alu_control = 0x8; // SRA (Shift Right Arithmetic)
+          }
+          break;
+        case 0x2:
+          alu_control = 0x9; // SLT (Set Less Than)
+          break;
+        case 0x3:
+          alu_control = 0x10; // SLTU (Set Less Than Unsigned)
+          break;
+        default:
+          alu_control = 0x111; // Invalid instruction
+      }
+      break;
+    // cases for other types of instructions
+
+
+    //I-Type (Load, Immediate, and ecall)
+    case 0x13: // Immediate
+      switch(idex_reg.instr.itype.funct3) {
+        case 0x0: 
+          alu_control = 0x0;  // ADD
+          break;  // ADDI
+        case 0x1: 
+          alu_control = 0x6; // SLL (Shift Left Logical)
+          break;
+        case 0x2: 
+          alu_control = 0x9; // SLT (Set Less Than)
+          break;  // SLTI
+        case 0x3: 
+          alu_control = 0x10; // SLTU (Set Less Than Unsigned)
+          break; // SLTIU
+        case 0x4: 
+          alu_control = 0x3; // XOR
+          break;  // XORI
+        case 0x5: // SRLI or SRAI
+          int immShifted = (instr.itype.imm >> 5);  
+          int funct7 = immShifted & ((1U << 7) - 1); // Use bitmasking to extract funct7 bits for slli, srli, and srai instructions
+          if(funct7 == 0x00) { // SRLI             
+            alu_control = 0x7; // SRL (Shift Right Logical)
+          }
+          else {   // SRAI           
+            alu_control = 0x8; // SRA (Shift Right Arithmetic)
+          }
+          break;  
+        case 0x6: 
+          alu_control = 0x4; // OR;
+          break;   // ORI
+        case 0x7: 
+          alu_control = 0x5; // AND
+          break;  // ANDI
+        default: 
+          alu_control = 0x111; // Invalid instruction
+          break;
+        }
+      break;
+      
+      case 0x03: // Load 
+      case 0x23: // Store
+        alu_control = 0x0; // Addition  (Effective Address = base address + offset from immediate)
+        break;
+
+        //SB-Type (Branch)
+    case 0x63:
+      alu_control = 0x1; // Subtraction  (Branch uses subtraction to determine if condition is true (comparisons))
+      break;
+
+    default:
+      alu_control = 0x111; // Invalid instruction
+    }
+
   return alu_control;
 }
 
@@ -31,9 +128,34 @@ uint32_t execute_alu(uint32_t alu_inp1, uint32_t alu_inp2, uint32_t alu_control)
     case 0x0: //add
       result = alu_inp1 + alu_inp2;
       break;
-    /**
-     * YOUR CODE HERE
-     */
+    case 0x1: //subtract
+      result = alu_inp1 - alu_inp2;
+      break;
+    case 0x3: //XOR
+      result = alu_inp1 ^ alu_inp2;
+      break;
+    case 0x4: //OR
+      result = alu_inp1 | alu_inp2;
+      break;
+    case 0x5: //AND
+      result = alu_inp1 & alu_inp2;
+      break;
+    case 0x6: //SLL
+      result = alu_inp1 << alu_inp2;
+      break;
+    case 0x7: //SRL  
+      result = (uint32_t)alu_inp1 >> alu_inp2;  // Cast to unsigned first so that we don't pad with sign bit
+      break;
+    case 0x8: //SRA 
+      result = (int32_t)alu_inp1 >> alu_inp2;   // Convert to signed int first to ensure sign bit padding
+      break;
+    case 0x9: //SLT
+      result = ((int32_t)alu_inp1 < (int32_t)alu_inp2)?1:0;  // Convert to signed int first to do signed comparison
+      break;
+    case 0x10: //SLTU
+      result = ((uint32_t)alu_inp1 < (uint32_t)alu_inp2)?1:0;
+      break;
+
     default:
       result = 0xBADCAFFE;
       break;
