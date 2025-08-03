@@ -289,12 +289,47 @@ idex_reg_t gen_control(Instruction instruction)
  * input  : <open to implementation>
  * output : bool
  **/
-bool gen_branch(/*<args>*/)
+bool gen_branch(exmem_reg_t exmem_reg)  // For conditional: determine if condition is met; For unconditional: just set PCSrc to 1
 {
-  /**
-   * YOUR CODE HERE
-   */
-  return false;
+  bool PCSrc = 0;
+  uint32_t ALU_Result = exmem_reg.ALU_Result;
+  bool isZero = exmem_reg.isZero;
+  Register rs1_val = exmem_reg.rs1_val;
+  Register rs2_val = exmem_reg.rs2_val;
+
+  if(exmem_reg.instr.opcode == 0x6F) {  // JAL
+    PCSrc = 1;  // Unconditional branch, so immediately set PCSrc to 1
+  }
+  else if(exmem_reg.instr.opcode == 0x63) {   // BRANCH
+    switch(exmem_reg.instr.sbtype.funct3) {
+      case 0x0:  // beq
+        PCSrc = (isZero == 1)?1:0;
+        break;
+      case 0x1:   // bne
+        PCSrc = (isZero == 0)?1:0;
+        break;
+      case 0x4:   // blt
+        PCSrc = ((int32_t)rs1_val < (int32_t)rs2_val)?1:0;   // Signed, so cast to signed int first
+        break;
+      case 0x5:   // bge
+        PCSrc = ((int32_t)rs1_val >= (int32_t)rs2_val)?1:0;
+        break;
+      case 0x6:   // bltu
+        PCSrc = (rs1_val < rs2_val)?1:0;
+        break;
+      case 0x7:   // bgeu
+        PCSrc = (rs1_val >= rs2_val)?1:0;
+        break;
+      default:
+        PCSrc = 0;
+        break;
+    }
+  }
+  else {
+    PCSrc = 0;
+  }
+
+  return PCSrc;
 }
 
 

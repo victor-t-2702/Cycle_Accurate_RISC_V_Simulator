@@ -149,9 +149,35 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
 exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 {
   exmem_reg_t exmem_reg = {0};
-  /**
-   * YOUR CODE HERE
-   */
+  Instruction instruction = idex_reg.instr;
+  uint32_t PC = idex_reg.instr_addr;
+  uint32_t rs1_val = idex_reg.rs1_val;
+  uint32_t rs2_val = idex_reg.rs2_val;
+  bool ALUSrc = idex_reg.ALUSrc;
+  uint32_t ALUcontrol = idex_reg.ALUcontrol;
+  uint32_t imm = idex_reg.imm;
+
+  exmem_reg.PC_Offset = imm + PC; // Get the sum of the immediate and the PC (at the time of FETCH) and put in exmem register 
+
+  uint32_t alu_inp1 = rs1_val;
+  uint32_t alu_inp2 = 0;
+
+  if(ALUSrc == 0) {   // MUX to determine whether to use IMM or RS2 for ALU operation
+    alu_inp2 = rs2_val;     //if ALUSrc = 0, use rs2_val; if ALUSrc = 1 use IMM
+  }
+  else {
+    alu_inp2 = imm;
+  }
+
+  exmem_reg.ALU_Result = execute_alu(alu_inp1, alu_inp2, ALUcontrol);  // Calculate ALU result and put in exmem register
+  exmem_reg.isZero = (exmem_reg.ALU_Result == 0)?1:0;  // Zero checking signal for BRANCH
+
+  exmem_reg.Branch = idex_reg.Branch;
+  exmem_reg.RegWrite = idex_reg.RegWrite;
+  exmem_reg.MemtoReg = idex_reg.MemtoReg;
+  exmem_reg.MemRead = idex_reg.MemRead;
+  exmem_reg.MemWrite = idex_reg.MemWrite;  // Move signals along from ID/EX register
+
   return exmem_reg;
 }
 
