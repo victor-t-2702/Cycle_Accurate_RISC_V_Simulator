@@ -18,6 +18,7 @@ extern uint64_t stall_counter;
 extern uint64_t branch_counter;
 extern uint64_t fwd_exex_counter;
 extern uint64_t fwd_exmem_counter;
+extern uint64_t mem_access_counter;
 
 ///////////////////////////////////////////////////////////////////////////////
 /// RISC-V Pipeline Register Types
@@ -28,6 +29,9 @@ typedef struct
   Instruction instr;
   uint32_t    instr_addr;
 
+  //I added this
+  uint32_t    instruction_bits;
+
 }ifid_reg_t;
 
 typedef struct
@@ -36,6 +40,7 @@ typedef struct
   uint32_t    instr_addr;
   
   //Fields I added
+  uint32_t    instruction_bits;
   Register rs1_val;
   Register rs2_val;
   uint32_t imm;
@@ -55,6 +60,7 @@ typedef struct
   Instruction instr;
   uint32_t    instr_addr;
   
+  uint32_t    instruction_bits;
   Register rs1_val;
   Register rs2_val;
   Register rd_address;
@@ -76,6 +82,7 @@ typedef struct
   uint32_t    instr_addr;
   
   //Fields I added
+  uint32_t    instruction_bits;
   uint32_t wb_v;
   Register rs1_val;
   Register rs2_val;

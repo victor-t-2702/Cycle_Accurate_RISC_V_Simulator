@@ -15,6 +15,10 @@ uint32_t gen_alu_control(idex_reg_t idex_reg)
 {
   uint32_t alu_control = 0;
   Instruction instr = idex_reg.instr;
+
+  //Just moved it up
+  int immShifted = (instr.itype.imm >> 5);  
+  int funct7 = immShifted & ((1U << 7) - 1); // Use bitmasking to extract funct7 bits for slli, srli, and srai instructions
   switch(idex_reg.instr.opcode) {
     // R-Type
     case 0x33:
@@ -79,8 +83,8 @@ uint32_t gen_alu_control(idex_reg_t idex_reg)
           alu_control = 0x3; // XOR
           break;  // XORI
         case 0x5: // SRLI or SRAI
-          int immShifted = (instr.itype.imm >> 5);  
-          int funct7 = immShifted & ((1U << 7) - 1); // Use bitmasking to extract funct7 bits for slli, srli, and srai instructions
+          //int immShifted = (instr.itype.imm >> 5);  
+          //int funct7 = immShifted & ((1U << 7) - 1); // Use bitmasking to extract funct7 bits for slli, srli, and srai instructions
           if(funct7 == 0x00) { // SRLI             
             alu_control = 0x7; // SRL (Shift Right Logical)
           }
