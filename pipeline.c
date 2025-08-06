@@ -262,11 +262,9 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 
 
 
-  /*
   bool take_branch = gen_branch(exmem_reg);
   pwires_p->pcsrc = take_branch;
   pwires_p->pc_src1 = exmem_reg.PC_Offset;
-  */
 
   return exmem_reg;
 }
@@ -280,11 +278,6 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* memory_p, Cache* cache_p)
 {
   memwb_reg_t memwb_reg = {0};
-
-  // Branch decision
-  bool take_branch = gen_branch(exmem_reg);
-  pwires_p->pcsrc = take_branch;
-  pwires_p->pc_src1 = exmem_reg.PC_Offset;
 
   //For hazard detection
   memwb_reg.RegisterRs1 = exmem_reg.RegisterRs1;
@@ -350,6 +343,9 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
   memwb_reg.instruction_bits = instruction_bits;
   memwb_reg.instr_addr = PC;
   
+  //bool take_branch = gen_branch(exmem_reg);
+  //pwires_p->pcsrc = take_branch;
+  //pwires_p->pc_src1 = exmem_reg.PC_Offset;
 
   memwb_reg.instr = instruction;
   memwb_reg.imm = imm;
@@ -401,9 +397,13 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
   // process each stage
 
   /* Output               |    Stage      |       Inputs  */
+  
   pregs_p->ifid_preg.inp  = stage_fetch     (pwires_p, regfile_p, memory_p);
   
   pregs_p->idex_preg.inp  = stage_decode    (pregs_p->ifid_preg.out, pwires_p, regfile_p);
+
+                            detect_hazard   (pregs_p, pwires_p, regfile_p); //Kind of imagine this to be in parallel with stage decode
+                                                                            //Because they both access the ifid_preg.out
 
                             gen_forward     (pregs_p, pwires_p);  // Stage that generates forwarding signals
 
@@ -413,11 +413,25 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
 
                             stage_writeback (pregs_p->memwb_preg.out, pwires_p, regfile_p);
 
-                            flush           (pregs_p, pwires_p);  // Stage that flushes IFID, IDEX, and EXMEM registers if PCSrc == 1 (i.e. branch is taken)
-
   // update all the output registers for the next cycle from the input registers in the current cycle
-  pregs_p->ifid_preg.out  = pregs_p->ifid_preg.inp;
-  pregs_p->idex_preg.out  = pregs_p->idex_preg.inp;
+
+  //If no stall occurs, then procede as regular
+  //If there is a stall, the output stays the same to not overwrite instructions
+  if(pwires_p->stall_if != 1){
+    pregs_p->ifid_preg.out  = pregs_p->ifid_preg.inp;
+  } 
+
+  //When detect hazard finds a hazard, it sets pwires stall, so at the end of this function
+  //the instruction in decode is not pushed forward, instead, a NOP is pushed out, the current 
+  //instruction in decode is not lost because ifid_preg.out is not updated, so next cycle pregs_p->idex_preg.in is still
+  //the same instruction
+  if(pwires_p->stall_id == 1){
+    //Then the idexpreg.out should be a nop
+  }
+  else{
+    pregs_p->idex_preg.out  = pregs_p->idex_preg.inp;
+  }
+
   pregs_p->exmem_preg.out = pregs_p->exmem_preg.inp;
   pregs_p->memwb_preg.out = pregs_p->memwb_preg.inp;
 

@@ -163,8 +163,9 @@ typedef struct
   uint32_t memwb_reg_wb_v;   // Values for forwarding
   uint32_t exmem_reg_ALU_Result;
 
-  bool PCWrite;
-  bool ifidWrite;
+  bool stall_if;
+  bool stall_id;
+  bool insert_bubble;
   
 }pipeline_wires_t;
 
