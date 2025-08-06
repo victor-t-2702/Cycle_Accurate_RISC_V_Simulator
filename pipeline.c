@@ -435,6 +435,7 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
   //the same instruction
   if(pwires_p->stall_id == 1){
     //Then the idexpreg.out should be a nop
+    pregs_p->idex_preg.out = no_op(pregs_p->idex_preg.inp);
   }
   else{
     pregs_p->idex_preg.out  = pregs_p->idex_preg.inp;
