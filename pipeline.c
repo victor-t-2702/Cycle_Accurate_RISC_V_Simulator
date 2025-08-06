@@ -261,10 +261,11 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
   exmem_reg.rd_address = rd_address;
 
 
-
+/*
   bool take_branch = gen_branch(exmem_reg);
   pwires_p->pcsrc = take_branch;
   pwires_p->pc_src1 = exmem_reg.PC_Offset;
+*/
 
   return exmem_reg;
 }
@@ -277,6 +278,10 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 //For store read the exmem register rs1 + imm and rs2, no need to write anything
 memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* memory_p, Cache* cache_p)
 {
+  bool take_branch = gen_branch(exmem_reg);
+  pwires_p->pcsrc = take_branch;
+  pwires_p->pc_src1 = exmem_reg.PC_Offset;
+  
   memwb_reg_t memwb_reg = {0};
 
   //For hazard detection
@@ -343,9 +348,6 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
   memwb_reg.instruction_bits = instruction_bits;
   memwb_reg.instr_addr = PC;
   
-  //bool take_branch = gen_branch(exmem_reg);
-  //pwires_p->pcsrc = take_branch;
-  //pwires_p->pc_src1 = exmem_reg.PC_Offset;
 
   memwb_reg.instr = instruction;
   memwb_reg.imm = imm;
@@ -412,6 +414,8 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
   pregs_p->memwb_preg.inp = stage_mem       (pregs_p->exmem_preg.out, pwires_p, memory_p, cache_p);
 
                             stage_writeback (pregs_p->memwb_preg.out, pwires_p, regfile_p);
+
+                            flush           (pregs_p, pwires_p);
 
   // update all the output registers for the next cycle from the input registers in the current cycle
 
