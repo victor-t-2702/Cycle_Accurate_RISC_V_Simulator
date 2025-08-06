@@ -194,7 +194,6 @@ uint32_t gen_imm(Instruction instruction)
       break;
     //lui 
     case 0x37:
-      //I dunnoe if i sign extend or nah, i mightve done this one wrong
       imm_val = instruction.utype.imm;
       break;
     //jal
@@ -264,7 +263,6 @@ idex_reg_t gen_control(Instruction instruction)
     case 0x37:
       idex_reg.ALUSrc = 1;
       idex_reg.MemWrite = 0;
-      //I think it directly loads the immediate into the rd, so no mem read/write, and 0 for mem to reg
       idex_reg.MemRead = 0;
       idex_reg.MemtoReg = 0;
       idex_reg.RegWrite = 1;
@@ -347,31 +345,48 @@ bool gen_branch(exmem_reg_t exmem_reg)  // For conditional: determine if conditi
 */
 void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 {
-  // Detecting EX hazard with Previous Instruction (1st and 3rd ifs) and MEM hazard (2nd and 4th ifs)
-  //NOT SURE IF I'M SUPPOSED TO USE preg.out or .inp
-  if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1)) {
-    pwires_p->forwardA = 2;  //Forward from EX/MEM pipe stage
-    printf("[FWD]: Resolving EX hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
+  //Shortening idex_reg_out and exmem_reg_out
+  idex_reg_t idex_reg_out = pregs_p->idex_preg.out;
+  exmem_reg_t exmem_reg_out = pregs_p->exmem_preg.out;
+  memwb_reg_t memwb_reg_out = pregs_p->memwb_preg.out;
+
+  //If all other cases fail, forwardA and forwardB are zero, no forwarding needing
+  uint8_t forwardA = 0;
+  uint8_t forwardB = 0;
+
+  //To check if the instruction ahead of the second one is a write instruction that does not write to x0 register
+  bool writeInstruction;
+  if((exmem_reg_out.RegWrite == 1) && (exmem_reg_out.RegisterRd != 0)){
+    writeInstruction = 1;
   }
-  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1))) {
-    pwires_p->forwardA = 1;  //Forward from MEM/WB pipe stage
-    printf("[FWD]: Resolving MEM hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
-  }
-  else {
-    pwires_p->forwardA = 0;
+  else{
+    writeInstruction = 0;
   }
 
-  if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2)) {
-    pwires_p->forwardB = 2;  //Forward from EX/MEM pipe stage
-    printf("[FWD]: Resolving EX hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
+  //If instruction ahead writes not to x0 register and the rd matches the next instructions rs1, then forwardA = 2, aka 
+  //forward the value to be written to rd to the rs1 input of ALU
+  if((writeInstruction == 1) && (exmem_reg_out.RegisterRd == idex_reg_out.RegisterRs1)){
+    forwardA = 2;
   }
-  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2))) {
-    pwires_p->forwardB = 1;  //Forward from MEM/WB pipe stage
-    printf("[FWD]: Resolving MEM hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
+
+  //Same idea here, but with rs2
+  if((writeInstruction == 1) && (exmem_reg_out.RegisterRd == idex_reg_out.RegisterRs2)){
+    forwardB = 2;
   }
-  else {
-    pwires_p->forwardB = 0;
+
+  //To check if a value is needed from the memwb stage, in case the wb value two instructions ahead is needed
+  if((writeInstruction == 1) && (memwb_reg_out.RegisterRd == idex_reg_out.RegisterRs1) && (forwardA == 0)){
+    forwardA = 1;
   }
+
+  if((writeInstruction == 1) && (memwb_reg_out.RegisterRd == idex_reg_out.RegisterRs2) && (forwardB == 0)){
+    forwardB = 1;
+  }
+
+
+  //Assign the values of forwardA and forwardB into the wires
+  pwires_p->forwardA = forwardA;
+  pwires_p->forwardB = forwardB;
 }
 
 /**
@@ -382,9 +397,64 @@ void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 */
 void detect_hazard(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p, regfile_t* regfile_p)
 {
-  /**
-   * YOUR CODE HERE
-   */
+  ifid_reg_t ifid = pregs_p->ifid_preg.out;
+  Instruction instruction = ifid.instr;
+  Register ifid_rs1 = 0;
+  Register ifid_rs2 = 0;
+
+  idex_reg_t idex = pregs_p->idex_preg.out;
+
+    switch(instruction.opcode){
+    //R-type
+    case 0x33:
+      ifid_rs1 = instruction.rtype.rs1;
+      ifid_rs2 = instruction.rtype.rs2;
+
+      break;
+    //Non-load I-type
+    case 0x13:
+      ifid_rs1 = instruction.itype.rs1;
+      ifid_rs2 = 0;
+ 
+      break;
+    //Load I-type
+    case 0x03:
+      ifid_rs1 = instruction.itype.rs1;
+      ifid_rs2 = 0;
+
+      break;
+    //S-type
+    case 0x23:
+      ifid_rs1 = instruction.stype.rs1;
+      ifid_rs2 = instruction.stype.rs2;
+      break;
+    //B-type
+    case 0x63:
+      ifid_rs1 = instruction.sbtype.rs1;
+      ifid_rs2 = instruction.sbtype.rs2;
+      break;
+    //lui 
+    case 0x37:
+      ifid_rs1 = 0;
+      ifid_rs2 = 0;
+  
+      break;
+    //jal
+    case 0x6f:
+      ifid_rs1 = 0;
+      ifid_rs2 = 0;
+
+      break;
+    default:
+      ifid_rs1 = 0;
+      ifid_rs2 = 0;
+      break;
+  }
+  
+  if(idex.MemRead && ((idex.RegisterRd == ifid_rs1) || (idex.RegisterRd == ifid_rs2))){
+    pwires_p->PCWrite = 1;
+    pwires_p->ifidWrite = 1;
+  }
 }
 
 
