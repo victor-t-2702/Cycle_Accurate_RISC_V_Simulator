@@ -43,6 +43,9 @@ typedef struct
   uint32_t    instruction_bits;
   Register rs1_val;
   Register rs2_val;
+  Register RegisterRs1;  // The three registers that are being used at this stage (for hazard detection)
+  Register RegisterRs2;
+  Register RegisterRd;
   uint32_t imm;
   Register rd_address;
   
@@ -66,6 +69,10 @@ typedef struct
   Register rd_address;
   uint32_t imm;
 
+  Register RegisterRs1;  // The three registers that are being used at this stage (for hazard detection)
+  Register RegisterRs2;
+  Register RegisterRd;
+
   bool MemWrite;
   bool MemRead;
   bool MemtoReg;
@@ -88,6 +95,10 @@ typedef struct
   Register rs2_val;
   Register rd_address;
   uint32_t imm;
+
+  Register RegisterRs1;  // The three registers that are being used at this stage (for hazard detection)
+  Register RegisterRs2;
+  Register RegisterRd;
 
   bool MemWrite;
   bool MemRead;
@@ -145,9 +156,13 @@ typedef struct
   bool      pcsrc;
   uint32_t  pc_src0;
   uint32_t  pc_src1;
-  /**
-   * Add other fields here
-   */
+
+  uint8_t forwardA;  // Forwarding signals
+  uint8_t forwardB;
+
+  uint32_t memwb_reg_wb_v;   // Values for forwarding
+  uint32_t exmem_reg_ALU_Result;
+  
 }pipeline_wires_t;
 
 
