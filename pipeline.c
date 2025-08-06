@@ -61,12 +61,16 @@ ifid_reg_t stage_fetch(pipeline_wires_t* pwires_p, regfile_t* regfile_p, Byte* m
   //Increments PC by 4, store it in the wires for pc_src0
   pwires_p->pc_src0 = PC + 4;
 
-  if(pwires_p->pcsrc == 1){
-    regfile_p->PC = pwires_p->pc_src1;
+  //If we dont stall, update PC accordingly, if we do stall, PC never gets updated
+  if(!pwires_p->stall_if){
+    if(pwires_p->pcsrc == 1){
+      regfile_p->PC = pwires_p->pc_src1;
+    }
+    else{
+      regfile_p->PC = pwires_p->pc_src0;
+    }
   }
-  else{
-    regfile_p->PC = pwires_p->pc_src0;
-  }
+
   
   return ifid_reg;
 }
