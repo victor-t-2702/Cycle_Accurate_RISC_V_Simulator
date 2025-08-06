@@ -345,48 +345,31 @@ bool gen_branch(exmem_reg_t exmem_reg)  // For conditional: determine if conditi
 */
 void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 {
-  //Shortening idex_reg_out and exmem_reg_out
-  idex_reg_t idex_reg_out = pregs_p->idex_preg.out;
-  exmem_reg_t exmem_reg_out = pregs_p->exmem_preg.out;
-  memwb_reg_t memwb_reg_out = pregs_p->memwb_preg.out;
-
-  //If all other cases fail, forwardA and forwardB are zero, no forwarding needing
-  uint8_t forwardA = 0;
-  uint8_t forwardB = 0;
-
-  //To check if the instruction ahead of the second one is a write instruction that does not write to x0 register
-  bool writeInstruction;
-  if((exmem_reg_out.RegWrite == 1) && (exmem_reg_out.RegisterRd != 0)){
-    writeInstruction = 1;
+    // Detecting EX hazard with Previous Instruction (1st and 3rd ifs) and MEM hazard (2nd and 4th ifs)
+  //NOT SURE IF I'M SUPPOSED TO USE preg.out or .inp
+  if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1)) {
+    pwires_p->forwardA = 2;  //Forward from EX/MEM pipe stage
+    printf("[FWD]: Resolving EX hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
   }
-  else{
-    writeInstruction = 0;
+  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1))) {
+    pwires_p->forwardA = 1;  //Forward from MEM/WB pipe stage
+    printf("[FWD]: Resolving MEM hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
+  }
+  else {
+    pwires_p->forwardA = 0;
   }
 
-  //If instruction ahead writes not to x0 register and the rd matches the next instructions rs1, then forwardA = 2, aka 
-  //forward the value to be written to rd to the rs1 input of ALU
-  if((writeInstruction == 1) && (exmem_reg_out.RegisterRd == idex_reg_out.RegisterRs1)){
-    forwardA = 2;
+  if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2)) {
+    pwires_p->forwardB = 2;  //Forward from EX/MEM pipe stage
+    printf("[FWD]: Resolving EX hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
   }
-
-  //Same idea here, but with rs2
-  if((writeInstruction == 1) && (exmem_reg_out.RegisterRd == idex_reg_out.RegisterRs2)){
-    forwardB = 2;
+  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2))) {
+    pwires_p->forwardB = 1;  //Forward from MEM/WB pipe stage
+    printf("[FWD]: Resolving MEM hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
   }
-
-  //To check if a value is needed from the memwb stage, in case the wb value two instructions ahead is needed
-  if((writeInstruction == 1) && (memwb_reg_out.RegisterRd == idex_reg_out.RegisterRs1) && (forwardA == 0)){
-    forwardA = 1;
+  else {
+    pwires_p->forwardB = 0;
   }
-
-  if((writeInstruction == 1) && (memwb_reg_out.RegisterRd == idex_reg_out.RegisterRs2) && (forwardB == 0)){
-    forwardB = 1;
-  }
-
-
-  //Assign the values of forwardA and forwardB into the wires
-  pwires_p->forwardA = forwardA;
-  pwires_p->forwardB = forwardB;
 }
 
 /**
@@ -451,16 +434,59 @@ void detect_hazard(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p, regfile
       break;
   }
   
-  if(idex.MemRead && ((idex.RegisterRd == ifid_rs1) || (idex.RegisterRd == ifid_rs2)) && ((ifid_rs1 != 0) || (ifid_rs2 != 0))){
-    pwires_p->stall_id = 1;
-    pwires_p->stall_if = 1;
-    pwires_p->insert_bubble = 1;
+  if(idex.MemRead && ((idex.RegisterRd == ifid_rs1) || (idex.RegisterRd == ifid_rs2))){
+    pwires_p->PCWrite = 1;
+    pwires_p->ifidWrite = 1;
+  }
+}
 
-    stall_counter++;
+void flush(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p) {
+  if(pwires_p->pcsrc == 1) {
+    // Zero out IFID register
+    pregs_p->ifid_preg.inp.instruction_bits = 0x00000013; // NOP
+    pregs_p->ifid_preg.inp.instr = parse_instruction(0x00000013);
 
-    #ifdef DEBUG_HAZARD
-    printf("[HZD]: Stalling and rewriting PC: 0x00002000");//come back and change this
-    #endif
+    // Zero out IDEX register
+    pregs_p->idex_preg.inp.instruction_bits = 0x00000013; // NOP
+    pregs_p->idex_preg.inp.instr = parse_instruction(0x00000013);
+    pregs_p->idex_preg.inp.rs1_val = 0;
+    pregs_p->idex_preg.inp.rs2_val = 0;
+    pregs_p->idex_preg.inp.RegisterRs1 = 0;
+    pregs_p->idex_preg.inp.RegisterRs2 = 0;
+    pregs_p->idex_preg.inp.RegisterRd = 0;
+    pregs_p->idex_preg.inp.imm = 0;
+    pregs_p->idex_preg.inp.rd_address = 0;
+    pregs_p->idex_preg.inp.ALUSrc = 0;
+    pregs_p->idex_preg.inp.ALUcontrol = 0;
+    pregs_p->idex_preg.inp.MemWrite = 0;
+    pregs_p->idex_preg.inp.MemRead = 0;
+    pregs_p->idex_preg.inp.MemtoReg = 0;
+    pregs_p->idex_preg.inp.RegWrite = 0;
+    pregs_p->idex_preg.inp.Branch = 0;
+
+    // Zero out EXMEM register
+    pregs_p->exmem_preg.inp.instruction_bits = 0x00000013; // NOP
+    pregs_p->exmem_preg.inp.instr = parse_instruction(0x00000013);
+    pregs_p->exmem_preg.inp.rs1_val = 0;
+    pregs_p->exmem_preg.inp.rs2_val = 0;
+    pregs_p->exmem_preg.inp.RegisterRs1 = 0;
+    pregs_p->exmem_preg.inp.RegisterRs2 = 0;
+    pregs_p->exmem_preg.inp.RegisterRd = 0;
+    pregs_p->exmem_preg.inp.imm = 0;
+    pregs_p->exmem_preg.inp.rd_address = 0;
+    pregs_p->exmem_preg.inp.MemWrite = 0;
+    pregs_p->exmem_preg.inp.MemRead = 0;
+    pregs_p->exmem_preg.inp.MemtoReg = 0;
+    pregs_p->exmem_preg.inp.RegWrite = 0;
+    pregs_p->exmem_preg.inp.Branch = 0;
+    pregs_p->exmem_preg.inp.isZero = 0;
+    pregs_p->exmem_preg.inp.PC_Offset = 0;
+    pregs_p->exmem_preg.inp.ALU_Result = 0;
+
+    printf("[CPL]: Pipeline Flushed\n");
+  }
+  else {
+    return;
   }
 }
 
