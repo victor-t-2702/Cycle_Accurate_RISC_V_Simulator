@@ -348,11 +348,14 @@ bool gen_branch(exmem_reg_t exmem_reg)  // For conditional: determine if conditi
 void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 {
   // Detecting EX hazard with Previous Instruction (1st and 3rd ifs) and MEM hazard (2nd and 4th ifs)
+  //NOT SURE IF I'M SUPPOSED TO USE preg.out or .inp
   if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1)) {
     pwires_p->forwardA = 2;  //Forward from EX/MEM pipe stage
+    printf("[FWD]: Resolving EX hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
   }
   else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1))) {
     pwires_p->forwardA = 1;  //Forward from MEM/WB pipe stage
+    printf("[FWD]: Resolving MEM hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
   }
   else {
     pwires_p->forwardA = 0;
@@ -360,9 +363,11 @@ void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 
   if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2)) {
     pwires_p->forwardB = 2;  //Forward from EX/MEM pipe stage
+    printf("[FWD]: Resolving EX hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
   }
   else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2))) {
     pwires_p->forwardB = 1;  //Forward from MEM/WB pipe stage
+    printf("[FWD]: Resolving MEM hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
   }
   else {
     pwires_p->forwardB = 0;
