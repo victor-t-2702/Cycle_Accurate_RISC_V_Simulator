@@ -397,9 +397,13 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
   // process each stage
 
   /* Output               |    Stage      |       Inputs  */
+  
   pregs_p->ifid_preg.inp  = stage_fetch     (pwires_p, regfile_p, memory_p);
   
   pregs_p->idex_preg.inp  = stage_decode    (pregs_p->ifid_preg.out, pwires_p, regfile_p);
+
+                            detect_hazard   (pregs_p, pwires_p, regfile_p); //Kind of imagine this to be in parallel with stage decode
+                                                                            //Because they both access the ifid_preg.out
 
                             gen_forward     (pregs_p, pwires_p);  // Stage that generates forwarding signals
 
@@ -410,8 +414,25 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
                             stage_writeback (pregs_p->memwb_preg.out, pwires_p, regfile_p);
 
   // update all the output registers for the next cycle from the input registers in the current cycle
-  pregs_p->ifid_preg.out  = pregs_p->ifid_preg.inp;
-  pregs_p->idex_preg.out  = pregs_p->idex_preg.inp;
+
+  //If no stall occurs, then procede as regular
+  //If there is a stall, the output stays the same to not overwrite instructions
+  if(pwires_p->stall_if != 1){
+    pregs_p->ifid_preg.out  = pregs_p->ifid_preg.inp;
+  } 
+
+  //When detect hazard finds a hazard, it sets pwires stall, so at the end of this function
+  //the instruction in decode is not pushed forward, instead, a NOP is pushed out, the current 
+  //instruction in decode is not lost because ifid_preg.out is not updated, so next cycle pregs_p->idex_preg.in is still
+  //the same instruction
+  if(pwires_p->stall_id == 1){
+    //Then the idexpreg.out should be a nop
+    pregs_p->idex_preg.out = no_op(pregs_p->idex_preg.inp);
+  }
+  else{
+    pregs_p->idex_preg.out  = pregs_p->idex_preg.inp;
+  }
+
   pregs_p->exmem_preg.out = pregs_p->exmem_preg.inp;
   pregs_p->memwb_preg.out = pregs_p->memwb_preg.inp;
 

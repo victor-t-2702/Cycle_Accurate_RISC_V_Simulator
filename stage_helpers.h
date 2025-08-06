@@ -451,12 +451,18 @@ void detect_hazard(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p, regfile
       break;
   }
   
-  if(idex.MemRead && ((idex.RegisterRd == ifid_rs1) || (idex.RegisterRd == ifid_rs2))){
-    pwires_p->PCWrite = 1;
-    pwires_p->ifidWrite = 1;
+  if(idex.MemRead && ((idex.RegisterRd == ifid_rs1) || (idex.RegisterRd == ifid_rs2)) && ((ifid_rs1 != 0) || (ifid_rs2 != 0))){
+    pwires_p->stall_id = 1;
+    pwires_p->stall_if = 1;
+    pwires_p->insert_bubble = 1;
+
+    stall_counter++;
+
+    #ifdef DEBUG_HAZARD
+    printf("[HZD]: Stalling and rewriting PC: 0x00002000");//come back and change this
+    #endif
   }
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 
