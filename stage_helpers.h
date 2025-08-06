@@ -469,6 +469,27 @@ void flush(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p) {
   }
 }
 
+idex_reg_t no_op(idex_reg_t idex){
+
+    idex_reg_t bubble = idex;
+    bubble.instruction_bits = 0x00000013; // NOP
+    bubble.instr = parse_instruction(0x00000013);
+    bubble.rs1_val = 0;
+    bubble.rs2_val = 0;
+    bubble.RegisterRs1 = 0;
+    bubble.RegisterRs2 = 0;
+    bubble.RegisterRd = 0;
+    bubble.imm = 0;
+    bubble.rd_address = 0;
+    bubble.ALUSrc = 0;
+    bubble.ALUcontrol = 0;
+    bubble.MemWrite = 0;
+    bubble.MemRead = 0;
+    bubble.MemtoReg = 0;
+    bubble.RegWrite = 0;
+    bubble.Branch = 0;
+    return bubble;
+}
 ///////////////////////////////////////////////////////////////////////////////
 
 
