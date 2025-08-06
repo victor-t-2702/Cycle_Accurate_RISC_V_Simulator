@@ -25,6 +25,7 @@ void bootstrap(pipeline_wires_t* pwires_p, pipeline_regs_t* pregs_p, regfile_t* 
   pwires_p->pc_src0 = regfile_p->PC;
 }
 
+
 ///////////////////////////
 /// STAGE FUNCTIONALITY ///
 ///////////////////////////
@@ -147,10 +148,16 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
   printf("[ID ]: Instruction [%08x]@[%08x]: ", instruction_bits, PC);
   decode_instruction(instruction_bits);
   #endif
+  
 
   //Read the values of rs1 and rs2
   int32_t rs1_val = regfile_p->R[rs1];
   int32_t rs2_val = regfile_p->R[rs2];
+
+  //For hazard detection
+  idex_reg.RegisterRs1 = rs1;
+  idex_reg.RegisterRs2 = rs2;
+  idex_reg.RegisterRd = rd;
 
   //Put the instruction, PC, generated immediate, rs1 and rs2 values, rd address, and the ALU control command into the idex register
   idex_reg.instruction_bits = instruction_bits;
@@ -171,6 +178,12 @@ idex_reg_t stage_decode(ifid_reg_t ifid_reg, pipeline_wires_t* pwires_p, regfile
 exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 {
   exmem_reg_t exmem_reg = {0};
+
+ //For hazard detection
+  exmem_reg.RegisterRs1 = idex_reg.RegisterRs1;
+  exmem_reg.RegisterRs2 = idex_reg.RegisterRs2;
+  exmem_reg.RegisterRd = idex_reg.RegisterRd;
+
   Instruction instruction = idex_reg.instr;
   uint32_t PC = idex_reg.instr_addr;
   uint32_t rs1_val = idex_reg.rs1_val;
@@ -182,13 +195,31 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 
   exmem_reg.PC_Offset = imm + PC; // Get the sum of the immediate and the PC (at the time of FETCH) and put in exmem register 
 
-  uint32_t alu_inp1 = rs1_val;
+  uint32_t alu_inp1 = 0;
   uint32_t alu_inp2 = 0;
 
-  if(ALUSrc == 0) {   // MUX to determine whether to use IMM or RS2 for ALU operation
-    alu_inp2 = rs2_val;     //if ALUSrc = 0, use rs2_val; if ALUSrc = 1 use IMM
+// MUX to determine whether to use RS1 for ALU operation (or forward)
+  if(pwires_p->forwardA == 0) { // No forwarding  
+    alu_inp1 = rs1_val;     
   }
-  else {
+  else if(pwires_p->forwardA == 2) { // Forwarding 
+    alu_inp1 = pwires_p->exmem_reg_ALU_Result;   // The first ALU operand is forwarded from the prior ALU result.  (Source: EX/MEM)
+  }
+  else if(pwires_p->forwardA == 1) { // Forwarding 
+    alu_inp1 = pwires_p->memwb_reg_wb_v;   // The first ALU operand is forwarded from data memory or an earlier ALU result. (Source: MEM/WB)
+  }
+
+  // MUX to determine whether to use IMM or RS2 for ALU operation (or forward)
+  if(ALUSrc == 0 && pwires_p->forwardB == 0) { // No forwarding  
+    alu_inp2 = rs2_val;     
+  }
+  else if(ALUSrc == 0 && pwires_p->forwardB == 2) { // Forwarding 
+    alu_inp2 = pwires_p->exmem_reg_ALU_Result;   // The second ALU operand is forwarded from the prior ALU result    (Source: EX/MEM)
+  }
+  else if(ALUSrc == 0 && pwires_p->forwardB == 1) { // Forwarding 
+    alu_inp2 = pwires_p->memwb_reg_wb_v;   // The second ALU operand is forwarded from data memory or an earlier ALU result. (Source: MEM/WB)
+  }
+  else {   // Use IMM
     alu_inp2 = imm;
   }
 
@@ -207,6 +238,7 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
     exmem_reg.ALU_Result = execute_alu(alu_inp1, alu_inp2, ALUcontrol);  // Calculate ALU result and put in exmem register
   }
 
+  pwires_p->exmem_reg_ALU_Result = exmem_reg.ALU_Result;   // For forwarding
 
   if((exmem_reg.ALU_Result == 0) && (instruction.opcode == 0x63)){//Only need to evaluate branch, because JAL does not need isZero, it always jumps
     exmem_reg.isZero = 1;
@@ -228,6 +260,8 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
   exmem_reg.imm = imm;
   exmem_reg.rd_address = rd_address;
 
+
+
   bool take_branch = gen_branch(exmem_reg);
   pwires_p->pcsrc = take_branch;
   pwires_p->pc_src1 = exmem_reg.PC_Offset;
@@ -244,6 +278,11 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* memory_p, Cache* cache_p)
 {
   memwb_reg_t memwb_reg = {0};
+
+  //For hazard detection
+  memwb_reg.RegisterRs1 = exmem_reg.RegisterRs1;
+  memwb_reg.RegisterRs2 = exmem_reg.RegisterRs2;
+  memwb_reg.RegisterRd = exmem_reg.RegisterRd;
 
   Instruction instruction = exmem_reg.instr;
   uint32_t PC = exmem_reg.instr_addr;
@@ -320,6 +359,7 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
     memwb_reg.wb_v = ALU_Result;
   }
 
+  pwires_p->memwb_reg_wb_v = memwb_reg.wb_v;   // For forwarding
 
   return memwb_reg;
 }
@@ -361,7 +401,9 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
   
   pregs_p->idex_preg.inp  = stage_decode    (pregs_p->ifid_preg.out, pwires_p, regfile_p);
 
-  pregs_p->exmem_preg.inp = stage_execute   (pregs_p->idex_preg.out, pwires_p);
+                            gen_forward     (pregs_p, pwires_p);  // Stage that generates forwarding signals
+
+  pregs_p->exmem_preg.inp = stage_execute   (pregs_p->idex_preg.out, pwires_p); 
 
   pregs_p->memwb_preg.inp = stage_mem       (pregs_p->exmem_preg.out, pwires_p, memory_p, cache_p);
 

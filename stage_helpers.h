@@ -347,9 +347,26 @@ bool gen_branch(exmem_reg_t exmem_reg)  // For conditional: determine if conditi
 */
 void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 {
-  /**
-   * YOUR CODE HERE
-   */
+  // Detecting EX hazard with Previous Instruction (1st and 3rd ifs) and MEM hazard (2nd and 4th ifs)
+  if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1)) {
+    pwires_p->forwardA = 2;  //Forward from EX/MEM pipe stage
+  }
+  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1))) {
+    pwires_p->forwardA = 1;  //Forward from MEM/WB pipe stage
+  }
+  else {
+    pwires_p->forwardA = 0;
+  }
+
+  if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2)) {
+    pwires_p->forwardB = 2;  //Forward from EX/MEM pipe stage
+  }
+  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2))) {
+    pwires_p->forwardB = 1;  //Forward from MEM/WB pipe stage
+  }
+  else {
+    pwires_p->forwardB = 0;
+  }
 }
 
 /**
