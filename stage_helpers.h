@@ -27,8 +27,11 @@ uint32_t gen_alu_control(idex_reg_t idex_reg)
           if(idex_reg.instr.rtype.funct7 == 0x00) {
             alu_control = 0x0; // Addition
           }
-          else {
+          else if(idex_reg.instr.rtype.funct7 == 0x20) {
             alu_control = 0x1; // Subtraction
+          }
+          else if(idex_reg.instr.rtype.funct7 == 0x01){
+            alu_control = 0x11; //Multiply
           }
           break;
         case 0x4:
@@ -159,9 +162,11 @@ uint32_t execute_alu(uint32_t alu_inp1, uint32_t alu_inp2, uint32_t alu_control)
     case 0x10: //SLTU
       result = ((uint32_t)alu_inp1 < (uint32_t)alu_inp2)?1:0;
       break;
-
+    case 0x11: //MUL
+      result = (alu_inp1 * alu_inp2) & (0xffffffff);
+      break;
     default:
-      result = 0xBADCAFFE;
+      result = 0xBACCAFFE;
       break;
   };
   return result;
@@ -345,31 +350,30 @@ bool gen_branch(exmem_reg_t exmem_reg)  // For conditional: determine if conditi
 */
 void gen_forward(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p)
 {
-    // Detecting EX hazard with Previous Instruction (1st and 3rd ifs) and MEM hazard (2nd and 4th ifs)
+  pwires_p->forwardA = 0;
+  pwires_p->forwardB = 0;
+  // Detecting EX hazard with Previous Instruction and MEM hazard
   //NOT SURE IF I'M SUPPOSED TO USE preg.out or .inp
   if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1)) {
     pwires_p->forwardA = 2;  //Forward from EX/MEM pipe stage
     printf("[FWD]: Resolving EX hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
-  }
-  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1))) {
-    pwires_p->forwardA = 1;  //Forward from MEM/WB pipe stage
-    printf("[FWD]: Resolving MEM hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
-  }
-  else {
-    pwires_p->forwardA = 0;
   }
 
   if(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2)) {
     pwires_p->forwardB = 2;  //Forward from EX/MEM pipe stage
     printf("[FWD]: Resolving EX hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
   }
-  else if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2))) {
+  
+  if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs1))) {
+    pwires_p->forwardA = 1;  //Forward from MEM/WB pipe stage
+    printf("[FWD]: Resolving MEM hazard on rs1: x%d\n", pregs_p->idex_preg.out.RegisterRs1);
+  }
+  
+  if(pregs_p->memwb_preg.out.RegWrite && (pregs_p->memwb_preg.out.RegisterRd != 0) && (pregs_p->memwb_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2) && !(pregs_p->exmem_preg.out.RegWrite && (pregs_p->exmem_preg.out.RegisterRd != 0) && (pregs_p->exmem_preg.out.RegisterRd == pregs_p->idex_preg.out.RegisterRs2))) {
     pwires_p->forwardB = 1;  //Forward from MEM/WB pipe stage
     printf("[FWD]: Resolving MEM hazard on rs2: x%d\n", pregs_p->idex_preg.out.RegisterRs2);
   }
-  else {
-    pwires_p->forwardB = 0;
-  }
+
 }
 
 /**
@@ -441,9 +445,14 @@ void detect_hazard(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p, regfile
 
     stall_counter++;
 
-    #ifdef DEBUG_HAZARD
-    printf("[HZD]: Stalling and rewriting PC: 0x00002000");//come back and change this
-    #endif
+    //#ifdef DEBUG_HAZARD
+    printf("[HZD]: Stalling and rewriting PC: 0x%08x\n", regfile_p->PC);//come back and change this
+    //#endif
+  }
+  else{
+    pwires_p->stall_id = 0;
+    pwires_p->stall_if = 0;
+    pwires_p->insert_bubble = 0;
   }
 }
 
@@ -500,15 +509,15 @@ void flush(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p) {
 idex_reg_t no_op(idex_reg_t idex){
 
     idex_reg_t bubble = idex;
-    bubble.instruction_bits = 0x00000013; // NOP
-    bubble.instr = parse_instruction(0x00000013);
-    bubble.rs1_val = 0;
-    bubble.rs2_val = 0;
-    bubble.RegisterRs1 = 0;
-    bubble.RegisterRs2 = 0;
-    bubble.RegisterRd = 0;
-    bubble.imm = 0;
-    bubble.rd_address = 0;
+    //bubble.instruction_bits = 0x00000013; // NOP
+    //bubble.instr = parse_instruction(0x00000013);
+    //bubble.rs1_val = 0;
+    //bubble.rs2_val = 0;
+    //bubble.RegisterRs1 = 0;
+    //bubble.RegisterRs2 = 0;
+    //bubble.RegisterRd = 0;
+    //bubble.imm = 0;
+    //bubble.rd_address = 0;
     bubble.ALUSrc = 0;
     bubble.ALUcontrol = 0;
     bubble.MemWrite = 0;
