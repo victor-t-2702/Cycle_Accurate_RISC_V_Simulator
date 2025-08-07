@@ -27,8 +27,11 @@ uint32_t gen_alu_control(idex_reg_t idex_reg)
           if(idex_reg.instr.rtype.funct7 == 0x00) {
             alu_control = 0x0; // Addition
           }
-          else {
+          else if(idex_reg.instr.rtype.funct7 == 0x20) {
             alu_control = 0x1; // Subtraction
+          }
+          else if(idex_reg.instr.rtype.funct7 == 0x01){
+            alu_control = 0x11; //Multiply
           }
           break;
         case 0x4:
@@ -159,9 +162,11 @@ uint32_t execute_alu(uint32_t alu_inp1, uint32_t alu_inp2, uint32_t alu_control)
     case 0x10: //SLTU
       result = ((uint32_t)alu_inp1 < (uint32_t)alu_inp2)?1:0;
       break;
-
+    case 0x11: //MUL
+      result = (alu_inp1 * alu_inp2) & (0xffffffff);
+      break;
     default:
-      result = 0xBADCAFFE;
+      result = 0xBACCAFFE;
       break;
   };
   return result;
@@ -440,9 +445,14 @@ void detect_hazard(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p, regfile
 
     stall_counter++;
 
-    #ifdef DEBUG_HAZARD
-    printf("[HZD]: Stalling and rewriting PC: 0x00002000");//come back and change this
-    #endif
+    //#ifdef DEBUG_HAZARD
+    printf("[HZD]: Stalling and rewriting PC: 0x%08x\n", regfile_p->PC);//come back and change this
+    //#endif
+  }
+  else{
+    pwires_p->stall_id = 0;
+    pwires_p->stall_if = 0;
+    pwires_p->insert_bubble = 0;
   }
 }
 
@@ -499,15 +509,15 @@ void flush(pipeline_regs_t* pregs_p, pipeline_wires_t* pwires_p) {
 idex_reg_t no_op(idex_reg_t idex){
 
     idex_reg_t bubble = idex;
-    bubble.instruction_bits = 0x00000013; // NOP
-    bubble.instr = parse_instruction(0x00000013);
-    bubble.rs1_val = 0;
-    bubble.rs2_val = 0;
-    bubble.RegisterRs1 = 0;
-    bubble.RegisterRs2 = 0;
-    bubble.RegisterRd = 0;
-    bubble.imm = 0;
-    bubble.rd_address = 0;
+    //bubble.instruction_bits = 0x00000013; // NOP
+    //bubble.instr = parse_instruction(0x00000013);
+    //bubble.rs1_val = 0;
+    //bubble.rs2_val = 0;
+    //bubble.RegisterRs1 = 0;
+    //bubble.RegisterRs2 = 0;
+    //bubble.RegisterRd = 0;
+    //bubble.imm = 0;
+    //bubble.rd_address = 0;
     bubble.ALUSrc = 0;
     bubble.ALUcontrol = 0;
     bubble.MemWrite = 0;

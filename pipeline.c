@@ -433,9 +433,12 @@ void cycle_pipeline(regfile_t* regfile_p, Byte* memory_p, Cache* cache_p, pipeli
   
   pregs_p->ifid_preg.inp  = stage_fetch     (pwires_p, regfile_p, memory_p);
   
+                            detect_hazard   (pregs_p, pwires_p, regfile_p); //Kind of imagine this to be in parallel with stage decode
+                                                                            //Because they both access the ifid_preg.out
+                                                                          
   pregs_p->idex_preg.inp  = stage_decode    (pregs_p->ifid_preg.out, pwires_p, regfile_p);
 
-                            detect_hazard   (pregs_p, pwires_p, regfile_p); //Kind of imagine this to be in parallel with stage decode
+                            //detect_hazard   (pregs_p, pwires_p, regfile_p); //Kind of imagine this to be in parallel with stage decode
                                                                             //Because they both access the ifid_preg.out
 
                             gen_forward     (pregs_p, pwires_p);  // Stage that generates forwarding signals
