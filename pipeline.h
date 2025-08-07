@@ -162,6 +162,9 @@ typedef struct
 
   uint32_t memwb_reg_wb_v;   // Values for forwarding
   uint32_t exmem_reg_ALU_Result;
+  Register idex_reg_rs2_val;
+
+
 
   bool stall_if;
   bool stall_id;
