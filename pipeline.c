@@ -41,6 +41,16 @@ ifid_reg_t stage_fetch(pipeline_wires_t* pwires_p, regfile_t* regfile_p, Byte* m
   //Initialize the ifid_reg
   ifid_reg_t ifid_reg = {0};
 
+  //If we dont stall, update PC accordingly, if we do stall, PC never gets updated
+  if(!pwires_p->stall_if){
+    if(pwires_p->pcsrc == 1){
+      regfile_p->PC = pwires_p->pc_src1;
+    }
+    else{
+      regfile_p->PC = pwires_p->pc_src0;
+    }
+  }
+
   //Using the PC as base address, extract the 32 bits of instruction
   uint32_t PC = regfile_p->PC;
   uint32_t instruction_bits = (memory_p[PC]) | (memory_p[PC+1] << 8) | (memory_p[PC+2] << 16) | (memory_p[PC+3] << 24);
@@ -61,15 +71,7 @@ ifid_reg_t stage_fetch(pipeline_wires_t* pwires_p, regfile_t* regfile_p, Byte* m
   //Increments PC by 4, store it in the wires for pc_src0
   pwires_p->pc_src0 = PC + 4;
 
-  //If we dont stall, update PC accordingly, if we do stall, PC never gets updated
-  if(!pwires_p->stall_if){
-    if(pwires_p->pcsrc == 1){
-      regfile_p->PC = pwires_p->pc_src1;
-    }
-    else{
-      regfile_p->PC = pwires_p->pc_src0;
-    }
-  }
+
 
   
   return ifid_reg;
@@ -204,18 +206,23 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 
 // MUX to determine whether to use RS1 for ALU operation (or forward)
   if(pwires_p->forwardA == 0) { // No forwarding  
-    alu_inp1 = rs1_val;     
+    alu_inp1 = rs1_val;
+    exmem_reg.rs1_val = rs1_val;     
   }
   else if(pwires_p->forwardA == 2) { // Forwarding 
     alu_inp1 = pwires_p->exmem_reg_ALU_Result;   // The first ALU operand is forwarded from the prior ALU result.  (Source: EX/MEM)
+    exmem_reg.rs1_val = pwires_p->exmem_reg_ALU_Result;
+    fwd_exex_counter++;
   }
   else if(pwires_p->forwardA == 1) { // Forwarding 
     alu_inp1 = pwires_p->memwb_reg_wb_v;   // The first ALU operand is forwarded from data memory or an earlier ALU result. (Source: MEM/WB)
+    exmem_reg.rs1_val = pwires_p->memwb_reg_wb_v;
+    fwd_exmem_counter++;
   }
 
   // MUX to determine whether to use IMM or RS2 for ALU operation (or forward)
   if(ALUSrc == 0 && pwires_p->forwardB == 0) { // No forwarding  
-    alu_inp2 = rs2_val;     
+    alu_inp2 = rs2_val;    
   }
   else if(ALUSrc == 0 && pwires_p->forwardB == 2) { // Forwarding 
     alu_inp2 = pwires_p->exmem_reg_ALU_Result;   // The second ALU operand is forwarded from the prior ALU result    (Source: EX/MEM)
@@ -227,6 +234,18 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
     alu_inp2 = imm;
   }
 
+  if(pwires_p->forwardB == 0) { // No forwarding    
+    exmem_reg.rs2_val = rs2_val;  
+  }
+  else if(pwires_p->forwardB == 2) { // Forwarding 
+    exmem_reg.rs2_val = pwires_p->exmem_reg_ALU_Result;   // Rs2 is forwarded from the prior ALU result    (Source: EX/MEM)
+    fwd_exex_counter++;
+  }
+  else if(pwires_p->forwardB == 1) { // Forwarding 
+    exmem_reg.rs2_val = pwires_p->memwb_reg_wb_v;   // Rs2 is forwarded from data memory or an earlier ALU result. (Source: MEM/WB)
+    fwd_exmem_counter++;
+  }
+
   int32_t instruction_bits = idex_reg.instruction_bits;
   #ifdef DEBUG_CYCLE
   printf("[EX ]: Instruction [%08x]@[%08x]: ", instruction_bits, PC);
@@ -234,6 +253,9 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
   #endif
   exmem_reg.instruction_bits = instruction_bits;
   exmem_reg.instr_addr = PC;
+
+  //printf("ALU inputs: %08x, %08x\n", alu_inp1, alu_inp2);
+
 
   if(instruction.opcode == 0x37){ //Special case for LUI command
     exmem_reg.ALU_Result = imm << 12;
@@ -244,7 +266,7 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 
   pwires_p->exmem_reg_ALU_Result = exmem_reg.ALU_Result;   // For forwarding
 
-  if((exmem_reg.ALU_Result == 0) && (instruction.opcode == 0x63)){//Only need to evaluate branch, because JAL does not need isZero, it always jumps
+  if((exmem_reg.ALU_Result == 0)){//Only need to evaluate branch, because JAL does not need isZero, it always jumps
     exmem_reg.isZero = 1;
   }
   else{
@@ -258,8 +280,8 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
   exmem_reg.MemRead = idex_reg.MemRead;
   exmem_reg.MemWrite = idex_reg.MemWrite;  // Move signals along from ID/EX register
 
-  exmem_reg.rs1_val = rs1_val;
-  exmem_reg.rs2_val = rs2_val;
+  //exmem_reg.rs1_val = rs1_val;
+  //exmem_reg.rs2_val = rs2_val;
   exmem_reg.instr = instruction;
   exmem_reg.imm = imm;
   exmem_reg.rd_address = rd_address;
@@ -282,9 +304,6 @@ exmem_reg_t stage_execute(idex_reg_t idex_reg, pipeline_wires_t* pwires_p)
 //For store read the exmem register rs1 + imm and rs2, no need to write anything
 memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* memory_p, Cache* cache_p)
 {
-  bool take_branch = gen_branch(exmem_reg);
-  pwires_p->pcsrc = take_branch;
-  pwires_p->pc_src1 = exmem_reg.PC_Offset;
   
   memwb_reg_t memwb_reg = {0};
 
@@ -311,6 +330,7 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
     switch(instruction.itype.funct3){
       case 0x0: //Load byte
         load_val = sign_extend_number(memory_p[ALU_Result], 8);
+        //printf("Load Val: %d\n", load_val);
         break;
       case 0x1: //Load half word
         load_val = sign_extend_number((memory_p[ALU_Result] | (memory_p[ALU_Result + 1] << 8)), 16);
@@ -328,6 +348,7 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
      switch(instruction.stype.funct3){
        case 0x0: //Store byte
          memory_p[ALU_Result] = rs2_val & 0xFF;
+         //printf("Store Val: %d\n", memory_p[ALU_Result]);
          break;
        case 0x1: //Store half word
          memory_p[ALU_Result] = rs2_val & 0xFF;
@@ -366,7 +387,13 @@ memwb_reg_t stage_mem(exmem_reg_t exmem_reg, pipeline_wires_t* pwires_p, Byte* m
   }
 
   pwires_p->memwb_reg_wb_v = memwb_reg.wb_v;   // For forwarding
+  bool take_branch = gen_branch(exmem_reg);
+  pwires_p->pcsrc = take_branch;
+  pwires_p->pc_src1 = exmem_reg.PC_Offset;
 
+  if(take_branch) {
+    branch_counter++;
+  }
   return memwb_reg;
 }
 
